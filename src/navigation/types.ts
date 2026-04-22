@@ -1,8 +1,11 @@
 export type RootStackParamList = {
   Main: undefined;
-  AddTransaction: { id?: string; prefill?: { shoppingItemId?: string } } | undefined;
+  AddTransaction:
+    | { id?: string; prefill?: { shoppingItemId?: string; ocr?: { amount?: number; date?: string } } }
+    | undefined;
   NoteEditor: { id?: string; linkedTransactionId?: string; linkedDate?: string } | undefined;
   ShoppingEditor: { id?: string } | undefined;
+  AssetEditor: { id?: string } | undefined;
 };
 
 export type AuthStackParamList = {
@@ -18,5 +21,6 @@ export type TabsParamList = {
   Shopping: undefined;
   Notes: undefined;
   Reports: undefined;
+  Assets: undefined;
   Settings: undefined;
 };

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { repository, Category, Note, ShoppingItem, Transaction } from '../db';
+import { repository, Asset, Category, Note, ShoppingItem, Transaction } from '../db';
 import { useAuth } from './AuthContext';
 
 interface DataContextValue {
@@ -8,6 +8,7 @@ interface DataContextValue {
   transactions: Transaction[];
   shoppingItems: ShoppingItem[];
   notes: Note[];
+  assets: Asset[];
   refresh: () => Promise<void>;
   addTransaction: (tx: Omit<Transaction, 'id'>) => Promise<Transaction>;
   updateTransaction: (tx: Transaction) => Promise<void>;
@@ -21,6 +22,9 @@ interface DataContextValue {
   addNote: (note: Omit<Note, 'id'>) => Promise<Note>;
   updateNote: (note: Note) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
+  addAsset: (asset: Omit<Asset, 'id'>) => Promise<Asset>;
+  updateAsset: (asset: Asset) => Promise<void>;
+  deleteAsset: (id: string) => Promise<void>;
   resetAll: () => Promise<void>;
 }
 
@@ -35,18 +39,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
 
   const refresh = useCallback(async () => {
-    const [cats, txs, items, ns] = await Promise.all([
+    const [cats, txs, items, ns, as] = await Promise.all([
       repository.listCategories(),
       repository.listTransactions(),
       repository.listShoppingItems(),
       repository.listNotes(),
+      repository.listAssets(),
     ]);
     setCategories(cats);
     setTransactions(txs);
     setShoppingItems(items);
     setNotes(ns);
+    setAssets(as);
   }, []);
 
   useEffect(() => {
@@ -164,6 +171,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh]
   );
 
+  const addAsset = useCallback(
+    async (asset: Omit<Asset, 'id'>) => {
+      const created = await repository.addAsset(asset);
+      await refresh();
+      return created;
+    },
+    [refresh]
+  );
+
+  const updateAsset = useCallback(
+    async (asset: Asset) => {
+      await repository.updateAsset(asset);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const deleteAsset = useCallback(
+    async (id: string) => {
+      await repository.deleteAsset(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
   const resetAll = useCallback(async () => {
     await repository.reset();
     await refresh();
@@ -176,6 +208,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       transactions,
       shoppingItems,
       notes,
+      assets,
       refresh,
       addTransaction,
       updateTransaction,
@@ -189,6 +222,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addNote,
       updateNote,
       deleteNote,
+      addAsset,
+      updateAsset,
+      deleteAsset,
       resetAll,
     }),
     [
@@ -197,6 +233,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       transactions,
       shoppingItems,
       notes,
+      assets,
       refresh,
       addTransaction,
       updateTransaction,
@@ -210,6 +247,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addNote,
       updateNote,
       deleteNote,
+      addAsset,
+      updateAsset,
+      deleteAsset,
       resetAll,
     ]
   );

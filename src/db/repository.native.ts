@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Category, Note, Repository, ShoppingItem, Transaction } from './types';
+import { Asset, Category, Note, RecurrenceInfo, Repository, ShoppingItem, Transaction } from './types';
 import { createId, defaultCategories } from './seed';
 
 let scope: string | null = null;
@@ -67,10 +67,24 @@ export const repository: Repository = {
         linkedTransactionId TEXT,
         linkedDate TEXT
       );
+      CREATE TABLE IF NOT EXISTS assets (
+        id TEXT PRIMARY KEY NOT NULL,
+        label TEXT NOT NULL,
+        amount REAL NOT NULL,
+        currency TEXT NOT NULL,
+        note TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
     `);
-    // Best-effort migration for an older DB that predates the noteId column.
+    // Best-effort migrations for older DBs
     try {
       await db.execAsync('ALTER TABLE transactions ADD COLUMN noteId TEXT');
+    } catch {
+      // column already exists — ignore
+    }
+    try {
+      await db.execAsync('ALTER TABLE transactions ADD COLUMN recurring TEXT');
     } catch {
       // column already exists — ignore
     }
@@ -117,15 +131,30 @@ export const repository: Repository = {
 
   async listTransactions() {
     const db = await getDb();
-    return db.getAllAsync<Transaction>('SELECT * FROM transactions ORDER BY date DESC');
+    const rows = await db.getAllAsync<Omit<Transaction, 'recurring'> & { recurring: string | null }>(
+      'SELECT * FROM transactions ORDER BY date DESC'
+    );
+    return rows.map((r) => ({
+      ...r,
+      recurring: r.recurring ? (JSON.parse(r.recurring) as RecurrenceInfo) : null,
+    }));
   },
 
   async addTransaction(tx) {
     const db = await getDb();
     const id = createId();
     await db.runAsync(
-      'INSERT INTO transactions (id, amount, description, date, categoryId, type, noteId) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, tx.amount, tx.description, tx.date, tx.categoryId, tx.type, tx.noteId ?? null]
+      'INSERT INTO transactions (id, amount, description, date, categoryId, type, noteId, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        tx.amount,
+        tx.description,
+        tx.date,
+        tx.categoryId,
+        tx.type,
+        tx.noteId ?? null,
+        tx.recurring ? JSON.stringify(tx.recurring) : null,
+      ]
     );
     return { id, ...tx };
   },
@@ -133,8 +162,17 @@ export const repository: Repository = {
   async updateTransaction(tx) {
     const db = await getDb();
     await db.runAsync(
-      'UPDATE transactions SET amount = ?, description = ?, date = ?, categoryId = ?, type = ?, noteId = ? WHERE id = ?',
-      [tx.amount, tx.description, tx.date, tx.categoryId, tx.type, tx.noteId ?? null, tx.id]
+      'UPDATE transactions SET amount = ?, description = ?, date = ?, categoryId = ?, type = ?, noteId = ?, recurring = ? WHERE id = ?',
+      [
+        tx.amount,
+        tx.description,
+        tx.date,
+        tx.categoryId,
+        tx.type,
+        tx.noteId ?? null,
+        tx.recurring ? JSON.stringify(tx.recurring) : null,
+        tx.id,
+      ]
     );
   },
 
@@ -243,10 +281,38 @@ export const repository: Repository = {
     await db.runAsync('DELETE FROM notes WHERE id = ?', [id]);
   },
 
+  async listAssets() {
+    const db = await getDb();
+    return db.getAllAsync<Asset>('SELECT * FROM assets ORDER BY updatedAt DESC');
+  },
+
+  async addAsset(asset) {
+    const db = await getDb();
+    const id = createId();
+    await db.runAsync(
+      'INSERT INTO assets (id, label, amount, currency, note, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, asset.label, asset.amount, asset.currency, asset.note ?? null, asset.createdAt, asset.updatedAt]
+    );
+    return { id, ...asset };
+  },
+
+  async updateAsset(asset) {
+    const db = await getDb();
+    await db.runAsync(
+      'UPDATE assets SET label = ?, amount = ?, currency = ?, note = ?, updatedAt = ? WHERE id = ?',
+      [asset.label, asset.amount, asset.currency, asset.note ?? null, asset.updatedAt, asset.id]
+    );
+  },
+
+  async deleteAsset(id) {
+    const db = await getDb();
+    await db.runAsync('DELETE FROM assets WHERE id = ?', [id]);
+  },
+
   async reset() {
     const db = await getDb();
     await db.execAsync(
-      'DELETE FROM transactions; DELETE FROM categories; DELETE FROM shopping_items; DELETE FROM notes;'
+      'DELETE FROM transactions; DELETE FROM categories; DELETE FROM shopping_items; DELETE FROM notes; DELETE FROM assets;'
     );
     for (const cat of defaultCategories) {
       await db.runAsync(

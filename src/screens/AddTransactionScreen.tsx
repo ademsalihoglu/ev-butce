@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Button,
   Chip,
   SegmentedButtons,
   Snackbar,
+  Switch,
   Text,
   TextInput,
   useTheme,
@@ -16,9 +17,11 @@ import { GlassCard } from '../components/GlassCard';
 import { GradientBackground } from '../components/GradientBackground';
 import { useData } from '../context/DataContext';
 import type { RootStackParamList } from '../navigation/types';
-import type { TransactionType } from '../db';
+import type { RecurrenceFrequency, Transaction, TransactionType } from '../db';
 import { currentMonthKey, parseAmount, toIsoDate } from '../utils/format';
 import { designTokens } from '../theme';
+import { pickImageAsBase64, runOcr } from '../utils/ocr';
+import { cancelRecurring, scheduleRecurring } from '../utils/notifications';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTransaction'>;
 
@@ -55,12 +58,27 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
   const initialCategoryId = existing?.categoryId ?? shoppingItem?.categoryId ?? '';
   const initialType: TransactionType = existing?.type ?? (shoppingItem ? 'expense' : 'expense');
 
+  const ocrPrefill = route.params?.prefill?.ocr;
+
   const [type, setType] = useState<TransactionType>(initialType);
-  const [amount, setAmount] = useState<string>(initialAmount);
+  const [amount, setAmount] = useState<string>(
+    ocrPrefill?.amount !== undefined ? String(ocrPrefill.amount).replace('.', ',') : initialAmount
+  );
   const [description, setDescription] = useState<string>(initialDescription);
-  const [date, setDate] = useState<string>(existing?.date ?? toIsoDate(new Date()));
+  const [date, setDate] = useState<string>(
+    ocrPrefill?.date ?? existing?.date ?? toIsoDate(new Date())
+  );
   const [categoryId, setCategoryId] = useState<string>(initialCategoryId);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [recurringOn, setRecurringOn] = useState<boolean>(Boolean(existing?.recurring));
+  const [recurringFreq, setRecurringFreq] = useState<RecurrenceFrequency>(
+    existing?.recurring?.frequency ?? 'monthly'
+  );
+  const [recurringDay, setRecurringDay] = useState<number>(
+    existing?.recurring?.dueDay ?? new Date(existing?.date ?? Date.now()).getDate()
+  );
 
   useEffect(() => {
     navigation.setOptions({
@@ -91,27 +109,36 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
       setError('Kategori seçin.');
       return;
     }
+    const recurring = recurringOn
+      ? { frequency: recurringFreq, dueDay: recurringDay }
+      : null;
     const payload = {
       amount: parsed,
       description: description.trim(),
       date,
       categoryId,
       type,
+      recurring,
     };
     try {
-      let createdId: string | null = null;
+      let saved: Transaction | null = null;
       if (editingId && existing) {
-        await updateTransaction({ id: existing.id, ...payload });
+        const next: Transaction = { id: existing.id, ...payload };
+        await updateTransaction(next);
+        saved = next;
       } else {
-        const created = await addTransaction(payload);
-        createdId = created.id;
+        saved = await addTransaction(payload);
       }
-      if (shoppingItem && createdId) {
+      if (shoppingItem && saved) {
         await updateShoppingItem({
           ...shoppingItem,
           bought: true,
-          convertedTransactionId: createdId,
+          convertedTransactionId: saved.id,
         });
+      }
+      if (saved) {
+        if (recurring) await scheduleRecurring(saved);
+        else await cancelRecurring(saved.id);
       }
       navigation.goBack();
     } catch (e) {
@@ -119,8 +146,38 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
     }
   }
 
+  async function handleOcr() {
+    setOcrLoading(true);
+    try {
+      const image = await pickImageAsBase64();
+      if (!image) return;
+      const result = await runOcr(image);
+      if (result.error) {
+        setError(`OCR hatası: ${result.error}`);
+        return;
+      }
+      let applied = 0;
+      if (result.amount !== null) {
+        setAmount(String(result.amount).replace('.', ','));
+        applied += 1;
+      }
+      if (result.date) {
+        setDate(result.date);
+        applied += 1;
+      }
+      if (applied === 0) {
+        setToast('Fişten tutar/tarih çıkarılamadı — elle düzenleyebilirsin.');
+      } else {
+        setToast(`Fişten ${applied === 2 ? 'tutar + tarih' : '1 alan'} dolduruldu.`);
+      }
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
   async function handleDelete() {
     if (!existing) return;
+    await cancelRecurring(existing.id);
     await deleteTransaction(existing.id);
     navigation.goBack();
   }
@@ -151,15 +208,36 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
 
           <View style={{ height: designTokens.spacing.md }} />
 
-          <TextInput
-            label="Tutar"
-            mode="outlined"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            placeholder="0,00"
-            left={<TextInput.Affix text="₺" />}
-          />
+          <View style={styles.ocrRow}>
+            <TextInput
+              label="Tutar"
+              mode="outlined"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              left={<TextInput.Affix text="₺" />}
+              style={{ flex: 1 }}
+            />
+            <Button
+              mode="contained-tonal"
+              icon={ocrLoading ? undefined : 'camera-plus-outline'}
+              onPress={handleOcr}
+              disabled={ocrLoading}
+              style={styles.ocrButton}
+              contentStyle={{ height: 48 }}
+            >
+              {ocrLoading ? 'Okunuyor…' : 'Fişten doldur'}
+            </Button>
+          </View>
+          {ocrLoading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <ActivityIndicator size={14} color={theme.colors.primary} />
+              <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+                OCR.space üzerinden okunuyor…
+              </Text>
+            </View>
+          ) : null}
 
           <View style={{ height: designTokens.spacing.md }} />
 
@@ -215,6 +293,70 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
             Bu ay: {currentMonthKey()}
           </Text>
 
+          <View style={styles.recurringPanel}>
+            <View style={styles.recurringHeader}>
+              <MaterialCommunityIcons name="repeat-variant" size={22} color={theme.colors.primary} />
+              <Text style={{ fontWeight: '700', flex: 1 }}>Tekrarlayan ödeme</Text>
+              <Switch value={recurringOn} onValueChange={setRecurringOn} />
+            </View>
+            {recurringOn ? (
+              <View style={{ gap: designTokens.spacing.sm, marginTop: designTokens.spacing.sm }}>
+                <SegmentedButtons
+                  value={recurringFreq}
+                  onValueChange={(v) => {
+                    const f = v as RecurrenceFrequency;
+                    setRecurringFreq(f);
+                    if (f === 'weekly' && recurringDay > 6) setRecurringDay(1);
+                    if (f === 'monthly' && recurringDay > 31) setRecurringDay(1);
+                  }}
+                  buttons={[
+                    { value: 'monthly', label: 'Aylık', icon: 'calendar-month' },
+                    { value: 'weekly', label: 'Haftalık', icon: 'calendar-week' },
+                  ]}
+                />
+                <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, marginTop: 4 }}>
+                  {recurringFreq === 'monthly'
+                    ? 'Her ayın kaçında tekrarlansın?'
+                    : 'Haftanın hangi günü tekrarlansın?'}
+                </Text>
+                <View style={styles.dayGrid}>
+                  {recurringFreq === 'monthly'
+                    ? Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <Chip
+                          key={d}
+                          selected={recurringDay === d}
+                          onPress={() => setRecurringDay(d)}
+                          compact
+                          style={{
+                            backgroundColor:
+                              recurringDay === d ? theme.colors.primaryContainer : theme.colors.surface,
+                          }}
+                        >
+                          {String(d)}
+                        </Chip>
+                      ))
+                    : ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'].map((name, i) => (
+                        <Chip
+                          key={i}
+                          selected={recurringDay === i}
+                          onPress={() => setRecurringDay(i)}
+                          compact
+                          style={{
+                            backgroundColor:
+                              recurringDay === i ? theme.colors.primaryContainer : theme.colors.surface,
+                          }}
+                        >
+                          {name}
+                        </Chip>
+                      ))}
+                </View>
+                <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+                  Hatırlatıcı: Dashboard'da "Yaklaşan ödemeler" kartında görünecek. Mobilde kurulum yapılıysa bildirim de alırsın.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
           <View style={styles.actions}>
             {existing ? (
               <Button mode="text" icon="trash-can-outline" onPress={handleDelete} textColor={theme.colors.error}>
@@ -236,7 +378,10 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
       </ScrollView>
 
       <Snackbar visible={!!error} onDismiss={() => setError(null)} duration={3000}>
-        {error}
+        {error ?? ''}
+      </Snackbar>
+      <Snackbar visible={!!toast} onDismiss={() => setToast(null)} duration={2500}>
+        {toast ?? ''}
       </Snackbar>
     </View>
   );
@@ -259,5 +404,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: designTokens.spacing.lg,
+  },
+  ocrRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: designTokens.spacing.sm,
+  },
+  ocrButton: {
+    alignSelf: 'stretch',
+  },
+  recurringPanel: {
+    marginTop: designTokens.spacing.lg,
+    padding: designTokens.spacing.md,
+    borderRadius: designTokens.radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.25)',
+    backgroundColor: 'rgba(99,102,241,0.08)',
+  },
+  recurringHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: designTokens.spacing.sm,
+  },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
 });
