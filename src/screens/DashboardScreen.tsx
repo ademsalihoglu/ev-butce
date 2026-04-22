@@ -149,7 +149,7 @@ export default function DashboardScreen({ navigation }: { navigation: Nav }) {
                       >
                         {describeRecurrence({
                           frequency: up.frequency,
-                          dueDay: up.dueDate.getDay(),
+                          dueDay: up.dueDay,
                         })}
                       </Text>
                     </View>

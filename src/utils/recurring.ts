@@ -9,6 +9,7 @@ export interface UpcomingPayment {
   dueDate: Date;
   daysUntil: number;
   frequency: RecurrenceInfo['frequency'];
+  dueDay: number;
 }
 
 function clampDay(year: number, month: number, day: number): number {
@@ -67,6 +68,7 @@ export function computeUpcomingPayments(
       dueDate: due,
       daysUntil,
       frequency: info.frequency,
+      dueDay: info.dueDay,
     });
   }
   return results.sort((a, b) => a.daysUntil - b.daysUntil);
