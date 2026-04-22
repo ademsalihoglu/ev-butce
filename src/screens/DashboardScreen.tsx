@@ -7,6 +7,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SummaryCard } from '../components/SummaryCard';
 import { TransactionItem } from '../components/TransactionItem';
+import { AnnouncementBanner } from '../components/AnnouncementBanner';
 import { useData } from '../context/DataContext';
 import { currentMonthKey, monthKey, monthLabel, formatCurrency } from '../utils/format';
 import { computeUpcomingPayments, describeRecurrence, formatDaysUntil } from '../utils/recurring';
@@ -70,6 +71,7 @@ export default function DashboardScreen({ navigation }: { navigation: Nav }) {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ScrollView contentContainerStyle={styles.container}>
+        <AnnouncementBanner navigation={navigation} />
         <View style={styles.headerRow}>
           <View>
             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>

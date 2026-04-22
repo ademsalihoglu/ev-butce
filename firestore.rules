@@ -8,11 +8,19 @@ rules_version = '2';
 //   groups/{groupId}/members/{userId}         — member metadata (displayName, role, joinedAt)
 //   groups/{groupId}/{collection}/{docId}     — shared data (categories, transactions, shoppingItems, notes, assets)
 //   invites/{code}                            — { groupId, createdBy } lookup doc for join-by-code flow
+//   admins/{userId}                           — presence of doc grants admin role
+//   siteConfig/global                         — single-doc site-wide settings (SEO, logo, contact, etc.)
+//   announcements/{id}                        — admin-authored news/campaigns shown in banner + Duyurular page
 
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isGroupMember(groupId) {
@@ -21,9 +29,42 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
     }
 
-    // Per-user private state.
+    // Admin registry. Any signed-in user may check their own admin status
+    // (presence read on their own uid). Admins can list/read all admins and
+    // promote/demote others. Additionally, users whose email matches the
+    // EXPO_PUBLIC_ADMIN_EMAILS bootstrap list write their own admin doc on
+    // first sign-in; we allow self-create so that bootstrap works without
+    // manual Console edits. Rotation: once someone is admin, they manage
+    // the registry.
+    match /admins/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.email is string;
+      allow update, delete: if isAdmin();
+    }
+
+    // Site-wide config (name/logo/SEO/contact). Publicly readable so the
+    // Welcome screen and SEO meta tags work before the user signs in. Only
+    // admins can mutate.
+    match /siteConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Announcements (news + campaigns). All signed-in users read, only admins write.
+    match /announcements/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Per-user private state. Admins can also read/list (used by the Admin
+    // panel to look up a user by email when promoting to admin).
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Invite code lookup: any signed-in user can read an invite to discover

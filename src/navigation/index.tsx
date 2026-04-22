@@ -18,6 +18,9 @@ import AddTransactionScreen from '../screens/AddTransactionScreen';
 import AssetsScreen from '../screens/AssetsScreen';
 import AssetEditorScreen from '../screens/AssetEditorScreen';
 import FamilyGroupScreen from '../screens/FamilyGroupScreen';
+import AdminPanelScreen from '../screens/AdminPanelScreen';
+import AnnouncementsScreen from '../screens/AnnouncementsScreen';
+import AboutScreen from '../screens/AboutScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -141,6 +144,21 @@ function MainNavigator() {
         name="FamilyGroup"
         component={FamilyGroupScreen}
         options={{ title: 'Aile Grubu', presentation: 'modal' }}
+      />
+      <RootStack.Screen
+        name="AdminPanel"
+        component={AdminPanelScreen}
+        options={{ title: 'Admin Paneli', presentation: 'modal' }}
+      />
+      <RootStack.Screen
+        name="Announcements"
+        component={AnnouncementsScreen}
+        options={{ title: 'Duyurular' }}
+      />
+      <RootStack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ title: 'Hakkında' }}
       />
     </RootStack.Navigator>
   );

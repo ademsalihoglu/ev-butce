@@ -7,6 +7,7 @@ import { AppThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { GroupProvider } from './src/context/GroupContext';
 import { DataProvider, useData } from './src/context/DataContext';
+import { AdminProvider, useAdmin } from './src/context/AdminContext';
 import RootNavigation from './src/navigation';
 
 if (Platform.OS === 'web') {
@@ -31,10 +32,32 @@ if (Platform.OS === 'web') {
   }
 }
 
+function setMeta(name: string, content: string): void {
+  if (typeof document === 'undefined') return;
+  let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute('name', name);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content ?? '');
+}
+
 function AppShell() {
   const theme = useTheme();
   const { user } = useAuth();
   const { loading } = useData();
+  const { siteConfig } = useAdmin();
+
+  // Sync web <title> / meta description / keywords from siteConfig.
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (siteConfig.seoTitle) {
+      document.title = siteConfig.seoTitle;
+    }
+    setMeta('description', siteConfig.seoDescription);
+    setMeta('keywords', siteConfig.seoKeywords);
+  }, [siteConfig.seoTitle, siteConfig.seoDescription, siteConfig.seoKeywords]);
 
   if (user && loading) {
     return (
@@ -60,11 +83,13 @@ function ThemedApp() {
       <SafeAreaProvider>
         <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
         <AuthProvider>
-          <GroupProvider>
-            <DataProvider>
-              <AppShell />
-            </DataProvider>
-          </GroupProvider>
+          <AdminProvider>
+            <GroupProvider>
+              <DataProvider>
+                <AppShell />
+              </DataProvider>
+            </GroupProvider>
+          </AdminProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </PaperProvider>

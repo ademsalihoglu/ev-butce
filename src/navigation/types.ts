@@ -7,6 +7,9 @@ export type RootStackParamList = {
   ShoppingEditor: { id?: string } | undefined;
   AssetEditor: { id?: string } | undefined;
   FamilyGroup: undefined;
+  AdminPanel: undefined;
+  Announcements: undefined;
+  About: undefined;
 };
 
 export type AuthStackParamList = {
