@@ -10,6 +10,7 @@ import {
   browserLocalPersistence,
   indexedDBLocalPersistence,
 } from 'firebase/auth';
+import { Firestore, getFirestore, initializeFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -28,6 +29,7 @@ export const firebaseConfigured = Boolean(
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
+let _firestore: Firestore | null = null;
 
 function getOrInitApp(): FirebaseApp {
   if (!firebaseConfigured) {
@@ -61,4 +63,18 @@ export function getFirebaseAuth(): Auth {
     }
   }
   return _auth;
+}
+
+export function getDb(): Firestore {
+  if (_firestore) return _firestore;
+  const app = getOrInitApp();
+  try {
+    // Use long-polling auto-detect for environments (e.g. some corporate
+    // networks, Expo web in certain sandboxes) where the streaming transport
+    // is flaky. This is a no-op if gRPC streams work fine.
+    _firestore = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    _firestore = getFirestore(app);
+  }
+  return _firestore;
 }

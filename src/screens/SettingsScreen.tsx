@@ -16,9 +16,13 @@ import {
 } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { useData } from '../context/DataContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useGroup } from '../context/GroupContext';
 import type { Category, TransactionType } from '../db';
 import { GlassCard } from '../components/GlassCard';
 import { GradientBackground } from '../components/GradientBackground';
@@ -40,8 +44,10 @@ type ExportRange = 'all' | 'month' | 'custom';
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { mode, setMode } = useAppTheme();
   const { user, signOutUser } = useAuth();
+  const { activeGroup, available: groupsAvailable } = useGroup();
   const { categories, transactions, addCategory, updateCategory, deleteCategory, resetAll } = useData();
   const [editing, setEditing] = useState<Category | null>(null);
   const [creating, setCreating] = useState<TransactionType | null>(null);
@@ -122,6 +128,24 @@ export default function SettingsScreen() {
               <Switch value={mode === 'dark'} onValueChange={(v) => setMode(v ? 'dark' : 'light')} />
             </View>
           </GlassCard>
+
+          {groupsAvailable ? (
+            <GlassCard padding="lg">
+              <SectionTitle icon="account-group">Aile Grubu</SectionTitle>
+              <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant, marginBottom: 10 }]}>
+                {activeGroup
+                  ? `Aktif: ${activeGroup.name} (${activeGroup.memberIds.length} üye). Tüm işlemler grup üyeleriyle paylaşılır.`
+                  : 'Bu cihazda yerel veri kullanılıyor. Bir grup oluştur veya davet kodu ile katıl.'}
+              </Text>
+              <Button
+                mode={activeGroup ? 'outlined' : 'contained'}
+                icon="account-multiple-plus"
+                onPress={() => navigation.navigate('FamilyGroup')}
+              >
+                {activeGroup ? 'Grubu yönet' : 'Grup oluştur / katıl'}
+              </Button>
+            </GlassCard>
+          ) : null}
 
           <GlassCard padding="lg">
             <SectionTitle icon="file-export-outline">Dışa Aktar</SectionTitle>

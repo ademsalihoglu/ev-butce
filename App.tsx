@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AppThemeProvider, useAppTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { GroupProvider } from './src/context/GroupContext';
 import { DataProvider, useData } from './src/context/DataContext';
 import RootNavigation from './src/navigation';
 
@@ -59,9 +60,11 @@ function ThemedApp() {
       <SafeAreaProvider>
         <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
         <AuthProvider>
-          <DataProvider>
-            <AppShell />
-          </DataProvider>
+          <GroupProvider>
+            <DataProvider>
+              <AppShell />
+            </DataProvider>
+          </GroupProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </PaperProvider>

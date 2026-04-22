@@ -35,6 +35,24 @@ npm run ios      # iOS simulator (macOS)
 
 İlk açılışta varsayılan kategoriler (Mutfak, Kira, Faturalar, Eğlence, Ulaşım, Sağlık, Maaş, Ek Gelir) seed edilir.
 
+## Aile Grubu (çoklu kullanıcı, Firestore)
+
+Kullanıcılar "Aile Grubu" oluşturup davet kodu ile eşleri/aile üyelerini davet edebilir. Grup aktifken tüm kategori / işlem / alışveriş / not / varlık verileri Firestore üzerinden **grubun tüm üyeleriyle paylaşılır**; yerel moda döndüğünde kullanıcının kendi cihazındaki veri geri gelir. Özellik Firebase yapılandırması (`.env`) varsa otomatik aktif olur.
+
+Güvenlik kuralları (`firestore.rules`) aşağıdaki prensiplere göre yazılmıştır:
+- Kullanıcı yalnızca kendi `users/{uid}` dokümanını okuyup yazabilir.
+- `groups/{id}` dokümanını yalnızca üyeler listeleyebilir; tekil `get` herkese açık (davet akışı için gerekli).
+- Üyelik ekleme sadece "kendini ekleme" olarak izinli; silme sadece "kendini silme" olarak izinli; sahip grubu silebilir.
+- `groups/{id}/{subcol}/{doc}` (categories, transactions, shoppingItems, notes, assets) sadece üyeler tarafından okunup yazılabilir.
+
+Firestore kurallarını deploy etmek için (bir kez):
+
+```bash
+npx firebase-tools login          # Google hesabı ile
+npx firebase-tools use evmuhasebeapp
+npx firebase-tools deploy --only firestore:rules
+```
+
 ## Proje Yapısı
 
 ```

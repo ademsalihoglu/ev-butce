@@ -1,9 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { repository, Asset, Category, Note, ShoppingItem, Transaction } from '../db';
+import { firestoreRepository } from '../db/firestoreRepository';
+import type { Repository } from '../db/types';
 import { useAuth } from './AuthContext';
+import { useGroup } from './GroupContext';
 
 interface DataContextValue {
   loading: boolean;
+  scopeLabel: 'local' | 'group';
   categories: Category[];
   transactions: Transaction[];
   shoppingItems: ShoppingItem[];
@@ -32,7 +36,11 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const scope = user?.uid ?? null;
+  const { activeGroupId } = useGroup();
+  const userScope = user?.uid ?? null;
+
+  const scopeLabel: 'local' | 'group' = activeGroupId ? 'group' : 'local';
+  const activeRepo: Repository = activeGroupId ? firestoreRepository : repository;
 
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -43,27 +51,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const [cats, txs, items, ns, as] = await Promise.all([
-      repository.listCategories(),
-      repository.listTransactions(),
-      repository.listShoppingItems(),
-      repository.listNotes(),
-      repository.listAssets(),
+      activeRepo.listCategories(),
+      activeRepo.listTransactions(),
+      activeRepo.listShoppingItems(),
+      activeRepo.listNotes(),
+      activeRepo.listAssets(),
     ]);
     setCategories(cats);
     setTransactions(txs);
     setShoppingItems(items);
     setNotes(ns);
     setAssets(as);
-  }, []);
+  }, [activeRepo]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
-        repository.setScope(scope);
-        await repository.init();
+        activeRepo.setScope(activeGroupId ?? userScope);
+        await activeRepo.init();
         if (!cancelled) await refresh();
+      } catch {
+        if (!cancelled) {
+          setCategories([]);
+          setTransactions([]);
+          setShoppingItems([]);
+          setNotes([]);
+          setAssets([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -71,139 +87,140 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refresh, scope]);
+  }, [refresh, userScope, activeGroupId, activeRepo]);
 
   const addTransaction = useCallback(
     async (tx: Omit<Transaction, 'id'>) => {
-      const created = await repository.addTransaction(tx);
+      const created = await activeRepo.addTransaction(tx);
       await refresh();
       return created;
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const updateTransaction = useCallback(
     async (tx: Transaction) => {
-      await repository.updateTransaction(tx);
+      await activeRepo.updateTransaction(tx);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const deleteTransaction = useCallback(
     async (id: string) => {
-      await repository.deleteTransaction(id);
+      await activeRepo.deleteTransaction(id);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const addCategory = useCallback(
     async (cat: Omit<Category, 'id'>) => {
-      await repository.addCategory(cat);
+      await activeRepo.addCategory(cat);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const updateCategory = useCallback(
     async (cat: Category) => {
-      await repository.updateCategory(cat);
+      await activeRepo.updateCategory(cat);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const deleteCategory = useCallback(
     async (id: string) => {
-      await repository.deleteCategory(id);
+      await activeRepo.deleteCategory(id);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const addShoppingItem = useCallback(
     async (item: Omit<ShoppingItem, 'id'>) => {
-      await repository.addShoppingItem(item);
+      await activeRepo.addShoppingItem(item);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const updateShoppingItem = useCallback(
     async (item: ShoppingItem) => {
-      await repository.updateShoppingItem(item);
+      await activeRepo.updateShoppingItem(item);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const deleteShoppingItem = useCallback(
     async (id: string) => {
-      await repository.deleteShoppingItem(id);
+      await activeRepo.deleteShoppingItem(id);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const addNote = useCallback(
     async (note: Omit<Note, 'id'>) => {
-      const created = await repository.addNote(note);
+      const created = await activeRepo.addNote(note);
       await refresh();
       return created;
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const updateNote = useCallback(
     async (note: Note) => {
-      await repository.updateNote(note);
+      await activeRepo.updateNote(note);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const deleteNote = useCallback(
     async (id: string) => {
-      await repository.deleteNote(id);
+      await activeRepo.deleteNote(id);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const addAsset = useCallback(
     async (asset: Omit<Asset, 'id'>) => {
-      const created = await repository.addAsset(asset);
+      const created = await activeRepo.addAsset(asset);
       await refresh();
       return created;
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const updateAsset = useCallback(
     async (asset: Asset) => {
-      await repository.updateAsset(asset);
+      await activeRepo.updateAsset(asset);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const deleteAsset = useCallback(
     async (id: string) => {
-      await repository.deleteAsset(id);
+      await activeRepo.deleteAsset(id);
       await refresh();
     },
-    [refresh]
+    [activeRepo, refresh]
   );
 
   const resetAll = useCallback(async () => {
-    await repository.reset();
+    await activeRepo.reset();
     await refresh();
-  }, [refresh]);
+  }, [activeRepo, refresh]);
 
   const value = useMemo<DataContextValue>(
     () => ({
       loading,
+      scopeLabel,
       categories,
       transactions,
       shoppingItems,
@@ -229,6 +246,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       loading,
+      scopeLabel,
       categories,
       transactions,
       shoppingItems,

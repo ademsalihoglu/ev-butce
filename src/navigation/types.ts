@@ -6,6 +6,7 @@ export type RootStackParamList = {
   NoteEditor: { id?: string; linkedTransactionId?: string; linkedDate?: string } | undefined;
   ShoppingEditor: { id?: string } | undefined;
   AssetEditor: { id?: string } | undefined;
+  FamilyGroup: undefined;
 };
 
 export type AuthStackParamList = {
