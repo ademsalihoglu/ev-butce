@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Button, Card, Menu, SegmentedButtons, Text, useTheme } from 'react-native-paper';
 import { PieChart, PieLegend, PieSlice } from '../components/PieChart';
+import { InsightsCard } from '../components/InsightsCard';
 import { useData } from '../context/DataContext';
 import { TransactionType } from '../db';
 import { currentMonthKey, formatCurrency, monthKey, monthLabel } from '../utils/format';
+import { buildInsights } from '../utils/insights';
 
 export default function ReportsScreen() {
   const theme = useTheme();
@@ -42,6 +44,11 @@ export default function ReportsScreen() {
   }, [transactions, categories, type, month, theme.colors.primary]);
 
   const total = slices.reduce((s, x) => s + x.value, 0);
+
+  const insights = useMemo(
+    () => buildInsights({ transactions, categories }),
+    [transactions, categories]
+  );
 
   return (
     <ScrollView
@@ -82,6 +89,8 @@ export default function ReportsScreen() {
           { value: 'income', label: 'Gelir', icon: 'arrow-down' },
         ]}
       />
+
+      <InsightsCard insights={insights} />
 
       <Card mode="elevated">
         <Card.Content>

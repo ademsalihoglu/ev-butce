@@ -8,6 +8,14 @@ export interface Category {
   type: TransactionType;
 }
 
+export type RecurrenceFrequency = 'weekly' | 'monthly';
+
+export interface RecurrenceInfo {
+  frequency: RecurrenceFrequency;
+  dueDay: number; // 1-31 for monthly, 0-6 for weekly (0 = Sunday)
+  endsAt?: string | null;
+}
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -16,6 +24,7 @@ export interface Transaction {
   categoryId: string;
   type: TransactionType;
   noteId?: string | null;
+  recurring?: RecurrenceInfo | null;
 }
 
 export interface ShoppingItem {
@@ -42,6 +51,25 @@ export interface Note {
   linkedDate?: string | null;
 }
 
+export type AssetCurrency =
+  | 'TRY'
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'XAU' // gram altın
+  | 'BTC'
+  | 'ETH';
+
+export interface Asset {
+  id: string;
+  label: string;
+  amount: number;
+  currency: AssetCurrency;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Repository {
   /** Set the per-user namespace. Must be called before init(). Null → signed out / anonymous. */
   setScope(scope: string | null): void;
@@ -62,5 +90,9 @@ export interface Repository {
   addNote(note: Omit<Note, 'id'>): Promise<Note>;
   updateNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
+  listAssets(): Promise<Asset[]>;
+  addAsset(asset: Omit<Asset, 'id'>): Promise<Asset>;
+  updateAsset(asset: Asset): Promise<void>;
+  deleteAsset(id: string): Promise<void>;
   reset(): Promise<void>;
 }

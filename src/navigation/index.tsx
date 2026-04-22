@@ -15,6 +15,8 @@ import ShoppingEditorScreen from '../screens/ShoppingEditorScreen';
 import NotesScreen from '../screens/NotesScreen';
 import NoteEditorScreen from '../screens/NoteEditorScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
+import AssetsScreen from '../screens/AssetsScreen';
+import AssetEditorScreen from '../screens/AssetEditorScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -84,6 +86,7 @@ function TabsNavigator() {
             Shopping: focused ? 'cart' : 'cart-outline',
             Notes: focused ? 'notebook' : 'notebook-outline',
             Reports: focused ? 'chart-pie' : 'chart-arc',
+            Assets: focused ? 'safe' : 'safe-square-outline',
             Settings: focused ? 'cog' : 'cog-outline',
           };
           return <MaterialCommunityIcons name={iconName[route.name]} size={size} color={color} />;
@@ -96,6 +99,7 @@ function TabsNavigator() {
       <Tabs.Screen name="Shopping" component={ShoppingListScreen} options={{ title: 'Liste' }} />
       <Tabs.Screen name="Notes" component={NotesScreen} options={{ title: 'Notlar' }} />
       <Tabs.Screen name="Reports" component={ReportsScreen} options={{ title: 'Raporlar' }} />
+      <Tabs.Screen name="Assets" component={AssetsScreen} options={{ title: 'Varlıklar' }} />
       <Tabs.Screen name="Settings" component={SettingsScreen} options={{ title: 'Ayarlar' }} />
     </Tabs.Navigator>
   );
@@ -126,6 +130,11 @@ function MainNavigator() {
         name="ShoppingEditor"
         component={ShoppingEditorScreen}
         options={{ title: 'Alışveriş Kalemi', presentation: 'modal' }}
+      />
+      <RootStack.Screen
+        name="AssetEditor"
+        component={AssetEditorScreen}
+        options={{ title: 'Varlık', presentation: 'modal' }}
       />
     </RootStack.Navigator>
   );

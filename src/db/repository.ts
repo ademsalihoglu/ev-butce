@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Category, Note, Repository, ShoppingItem, Transaction } from './types';
+import { Asset, Category, Note, Repository, ShoppingItem, Transaction } from './types';
 import { createId, defaultCategories } from './seed';
 
 let scope: string | null = null;
 
-function keyFor(kind: 'categories' | 'transactions' | 'shopping' | 'notes'): string {
+function keyFor(kind: 'categories' | 'transactions' | 'shopping' | 'notes' | 'assets'): string {
   const ns = scope ?? 'anon';
   return `ev_butce.${ns}.${kind}`;
 }
@@ -37,6 +37,7 @@ export const repository: Repository = {
     await writeJson(keyFor('transactions'), await readJson<Transaction[]>(keyFor('transactions'), []));
     await writeJson(keyFor('shopping'), await readJson<ShoppingItem[]>(keyFor('shopping'), []));
     await writeJson(keyFor('notes'), await readJson<Note[]>(keyFor('notes'), []));
+    await writeJson(keyFor('assets'), await readJson<Asset[]>(keyFor('assets'), []));
   },
 
   async listCategories() {
@@ -160,17 +161,47 @@ export const repository: Repository = {
     );
   },
 
+  async listAssets() {
+    const assets = await readJson<Asset[]>(keyFor('assets'), []);
+    return [...assets].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+
+  async addAsset(asset) {
+    const assets = await readJson<Asset[]>(keyFor('assets'), []);
+    const created: Asset = { id: createId(), ...asset };
+    await writeJson(keyFor('assets'), [created, ...assets]);
+    return created;
+  },
+
+  async updateAsset(asset) {
+    const assets = await readJson<Asset[]>(keyFor('assets'), []);
+    await writeJson(
+      keyFor('assets'),
+      assets.map((a) => (a.id === asset.id ? asset : a))
+    );
+  },
+
+  async deleteAsset(id) {
+    const assets = await readJson<Asset[]>(keyFor('assets'), []);
+    await writeJson(
+      keyFor('assets'),
+      assets.filter((a) => a.id !== id)
+    );
+  },
+
   async reset() {
     await AsyncStorage.multiRemove([
       keyFor('categories'),
       keyFor('transactions'),
       keyFor('shopping'),
       keyFor('notes'),
+      keyFor('assets'),
     ]);
     const seeded: Category[] = defaultCategories.map((c) => ({ ...c, id: createId() }));
     await writeJson(keyFor('categories'), seeded);
     await writeJson(keyFor('transactions'), []);
     await writeJson(keyFor('shopping'), []);
     await writeJson(keyFor('notes'), []);
+    await writeJson(keyFor('assets'), []);
   },
 };
