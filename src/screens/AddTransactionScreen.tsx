@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   Button,
+  Chip,
   SegmentedButtons,
   Snackbar,
   Text,
@@ -11,22 +12,28 @@ import {
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DatePickerField } from '../components/DatePickerField';
+import { GlassCard } from '../components/GlassCard';
+import { GradientBackground } from '../components/GradientBackground';
 import { useData } from '../context/DataContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { TransactionType } from '../db';
 import { currentMonthKey, parseAmount, toIsoDate } from '../utils/format';
+import { designTokens } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTransaction'>;
 
 export default function AddTransactionScreen({ route, navigation }: Props) {
   const theme = useTheme();
   const editingId = route.params?.id;
+  const prefillShoppingId = route.params?.prefill?.shoppingItemId ?? null;
   const {
     categories,
     transactions,
+    shoppingItems,
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    updateShoppingItem,
   } = useData();
 
   const existing = useMemo(
@@ -34,16 +41,32 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
     [editingId, transactions]
   );
 
-  const [type, setType] = useState<TransactionType>(existing?.type ?? 'expense');
-  const [amount, setAmount] = useState<string>(existing ? String(existing.amount).replace('.', ',') : '');
-  const [description, setDescription] = useState<string>(existing?.description ?? '');
+  const shoppingItem = useMemo(
+    () => (prefillShoppingId ? shoppingItems.find((it) => it.id === prefillShoppingId) ?? null : null),
+    [prefillShoppingId, shoppingItems]
+  );
+
+  const initialAmount = existing
+    ? String(existing.amount).replace('.', ',')
+    : shoppingItem
+    ? String(shoppingItem.estimatedPrice * (shoppingItem.quantity || 1)).replace('.', ',')
+    : '';
+  const initialDescription = existing?.description ?? (shoppingItem ? shoppingItem.name : '');
+  const initialCategoryId = existing?.categoryId ?? shoppingItem?.categoryId ?? '';
+  const initialType: TransactionType = existing?.type ?? (shoppingItem ? 'expense' : 'expense');
+
+  const [type, setType] = useState<TransactionType>(initialType);
+  const [amount, setAmount] = useState<string>(initialAmount);
+  const [description, setDescription] = useState<string>(initialDescription);
   const [date, setDate] = useState<string>(existing?.date ?? toIsoDate(new Date()));
-  const [categoryId, setCategoryId] = useState<string>(existing?.categoryId ?? '');
+  const [categoryId, setCategoryId] = useState<string>(initialCategoryId);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    navigation.setOptions({ title: editingId ? 'İşlemi Düzenle' : 'Yeni İşlem' });
-  }, [navigation, editingId]);
+    navigation.setOptions({
+      title: editingId ? 'İşlemi Düzenle' : shoppingItem ? 'Gidere Dönüştür' : 'Yeni İşlem',
+    });
+  }, [navigation, editingId, shoppingItem]);
 
   const visibleCategories = useMemo(
     () => categories.filter((c) => c.type === type),
@@ -76,10 +99,19 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
       type,
     };
     try {
+      let createdId: string | null = null;
       if (editingId && existing) {
         await updateTransaction({ id: existing.id, ...payload });
       } else {
-        await addTransaction(payload);
+        const created = await addTransaction(payload);
+        createdId = created.id;
+      }
+      if (shoppingItem && createdId) {
+        await updateShoppingItem({
+          ...shoppingItem,
+          bought: true,
+          convertedTransactionId: createdId,
+        });
       }
       navigation.goBack();
     } catch (e) {
@@ -94,107 +126,125 @@ export default function AddTransactionScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      contentContainerStyle={styles.container}
-    >
-      <SegmentedButtons
-        value={type}
-        onValueChange={(v) => setType(v as TransactionType)}
-        buttons={[
-          { value: 'expense', label: 'Gider', icon: 'arrow-up' },
-          { value: 'income', label: 'Gelir', icon: 'arrow-down' },
-        ]}
-      />
+    <View style={{ flex: 1 }}>
+      <GradientBackground />
+      <ScrollView contentContainerStyle={styles.container}>
+        <GlassCard padding="xl" radius="xl">
+          {shoppingItem ? (
+            <Chip
+              icon="cart-check"
+              style={{ alignSelf: 'flex-start', marginBottom: designTokens.spacing.md, backgroundColor: theme.colors.tertiaryContainer }}
+              textStyle={{ color: theme.colors.onTertiaryContainer }}
+            >
+              "{shoppingItem.name}" alışveriş listesinden
+            </Chip>
+          ) : null}
 
-      <TextInput
-        label="Tutar"
-        mode="outlined"
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="decimal-pad"
-        placeholder="0,00"
-        left={<TextInput.Affix text="₺" />}
-      />
+          <SegmentedButtons
+            value={type}
+            onValueChange={(v) => setType(v as TransactionType)}
+            buttons={[
+              { value: 'expense', label: 'Gider', icon: 'arrow-up' },
+              { value: 'income', label: 'Gelir', icon: 'arrow-down' },
+            ]}
+          />
 
-      <TextInput
-        label="Açıklama"
-        mode="outlined"
-        value={description}
-        onChangeText={setDescription}
-        placeholder="örn. market alışverişi"
-      />
+          <View style={{ height: designTokens.spacing.md }} />
 
-      <DatePickerField value={date} onChange={setDate} />
+          <TextInput
+            label="Tutar"
+            mode="outlined"
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="decimal-pad"
+            placeholder="0,00"
+            left={<TextInput.Affix text="₺" />}
+          />
 
-      <View style={{ gap: 8 }}>
-        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-          Kategori
-        </Text>
-        <View style={styles.categoryGrid}>
-          {visibleCategories.map((cat) => {
-            const selected = categoryId === cat.id;
-            return (
-              <Button
-                key={cat.id}
-                mode={selected ? 'contained' : 'outlined'}
-                onPress={() => setCategoryId(cat.id)}
-                buttonColor={selected ? cat.color : undefined}
-                textColor={selected ? '#fff' : cat.color}
-                icon={({ size }) => (
-                  <MaterialCommunityIcons
-                    name={cat.icon}
-                    size={size}
-                    color={selected ? '#fff' : cat.color}
-                  />
-                )}
-                style={{ borderColor: cat.color }}
-              >
-                {cat.name}
+          <View style={{ height: designTokens.spacing.md }} />
+
+          <TextInput
+            label="Açıklama"
+            mode="outlined"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="örn. market alışverişi"
+          />
+
+          <View style={{ height: designTokens.spacing.md }} />
+
+          <DatePickerField value={date} onChange={setDate} />
+
+          <View style={{ height: designTokens.spacing.md }} />
+
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+            Kategori
+          </Text>
+          <View style={styles.categoryGrid}>
+            {visibleCategories.map((cat) => {
+              const selected = categoryId === cat.id;
+              return (
+                <Button
+                  key={cat.id}
+                  mode={selected ? 'contained' : 'outlined'}
+                  onPress={() => setCategoryId(cat.id)}
+                  buttonColor={selected ? cat.color : undefined}
+                  textColor={selected ? '#fff' : cat.color}
+                  icon={({ size }) => (
+                    <MaterialCommunityIcons
+                      name={cat.icon}
+                      size={size}
+                      color={selected ? '#fff' : cat.color}
+                    />
+                  )}
+                  style={{ borderColor: cat.color }}
+                  compact
+                >
+                  {cat.name}
+                </Button>
+              );
+            })}
+            {visibleCategories.length === 0 && (
+              <Text style={{ color: theme.colors.onSurfaceVariant }}>
+                Bu türde kategori yok. Ayarlar'dan ekleyin.
+              </Text>
+            )}
+          </View>
+
+          <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }} variant="bodySmall">
+            Bu ay: {currentMonthKey()}
+          </Text>
+
+          <View style={styles.actions}>
+            {existing ? (
+              <Button mode="text" icon="trash-can-outline" onPress={handleDelete} textColor={theme.colors.error}>
+                Sil
               </Button>
-            );
-          })}
-          {visibleCategories.length === 0 && (
-            <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              Bu türde kategori yok. Ayarlar'dan ekleyin.
-            </Text>
-          )}
-        </View>
-      </View>
-
-      <Text style={{ color: theme.colors.onSurfaceVariant }} variant="bodySmall">
-        Bu ay: {currentMonthKey()}
-      </Text>
-
-      <View style={styles.actions}>
-        {existing ? (
-          <Button mode="text" icon="trash-can-outline" onPress={handleDelete} textColor={theme.colors.error}>
-            Sil
-          </Button>
-        ) : (
-          <View />
-        )}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button mode="outlined" onPress={() => navigation.goBack()}>
-            İptal
-          </Button>
-          <Button mode="contained" onPress={handleSubmit} disabled={!canSubmit}>
-            {existing ? 'Güncelle' : 'Kaydet'}
-          </Button>
-        </View>
-      </View>
+            ) : (
+              <View />
+            )}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button mode="outlined" onPress={() => navigation.goBack()}>
+                İptal
+              </Button>
+              <Button mode="contained" onPress={handleSubmit} disabled={!canSubmit}>
+                {existing ? 'Güncelle' : 'Kaydet'}
+              </Button>
+            </View>
+          </View>
+        </GlassCard>
+      </ScrollView>
 
       <Snackbar visible={!!error} onDismiss={() => setError(null)} duration={3000}>
         {error}
       </Snackbar>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 16,
+    padding: designTokens.spacing.lg,
     maxWidth: 720,
     width: '100%',
     alignSelf: 'center',
@@ -208,6 +258,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: designTokens.spacing.lg,
   },
 });

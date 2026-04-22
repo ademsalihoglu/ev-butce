@@ -1,23 +1,30 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   Button,
-  Card,
   Dialog,
   Divider,
   IconButton,
   List,
   Portal,
   SegmentedButtons,
+  Snackbar,
   Switch,
   Text,
   TextInput,
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useData } from '../context/DataContext';
 import { useAppTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import type { Category, TransactionType } from '../db';
+import { GlassCard } from '../components/GlassCard';
+import { GradientBackground } from '../components/GradientBackground';
+import { designTokens } from '../theme';
+import { exportTransactionsToExcel, exportTransactionsToPdf } from '../utils/export';
+import { currentMonthKey, toIsoDate } from '../utils/format';
 
 const PALETTE = [
   '#EF4444', '#F59E0B', '#EAB308', '#10B981', '#06B6D4',
@@ -29,103 +36,235 @@ const ICON_CHOICES = [
   'cash', 'trending-up', 'cart', 'school', 'dog', 'airplane', 'dots-horizontal',
 ];
 
+type ExportRange = 'all' | 'month' | 'custom';
+
 export default function SettingsScreen() {
   const theme = useTheme();
   const { mode, setMode } = useAppTheme();
-  const { categories, addCategory, updateCategory, deleteCategory, resetAll } = useData();
+  const { user, signOutUser } = useAuth();
+  const { categories, transactions, addCategory, updateCategory, deleteCategory, resetAll } = useData();
   const [editing, setEditing] = useState<Category | null>(null);
   const [creating, setCreating] = useState<TransactionType | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
+  const [exportRange, setExportRange] = useState<ExportRange>('all');
+  const [exportFrom, setExportFrom] = useState<string>('');
+  const [exportTo, setExportTo] = useState<string>(toIsoDate(new Date()));
+  const [busy, setBusy] = useState<'excel' | 'pdf' | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const resolvedRange = useMemo(() => {
+    if (exportRange === 'all') return { from: undefined, to: undefined };
+    if (exportRange === 'month') {
+      const key = currentMonthKey();
+      return { from: `${key}-01`, to: toIsoDate(new Date()) };
+    }
+    return { from: exportFrom || undefined, to: exportTo || undefined };
+  }, [exportRange, exportFrom, exportTo]);
+
+  const runExport = async (kind: 'excel' | 'pdf') => {
+    setBusy(kind);
+    try {
+      const fn = kind === 'excel' ? exportTransactionsToExcel : exportTransactionsToPdf;
+      await fn({
+        transactions,
+        categories,
+        from: resolvedRange.from,
+        to: resolvedRange.to,
+        title: 'Ev Bütçe Raporu',
+      });
+      setToast(kind === 'excel' ? 'Excel dışa aktarıldı.' : 'PDF hazır.');
+    } catch (e) {
+      setToast((e as Error).message ?? 'Dışa aktarım başarısız.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      contentContainerStyle={styles.container}
-    >
-      <Card mode="elevated">
-        <Card.Title title="Görünüm" titleVariant="titleMedium" />
-        <Card.Content>
-          <View style={styles.row}>
-            <Text>Koyu tema</Text>
-            <Switch
-              value={mode === 'dark'}
-              onValueChange={(v) => setMode(v ? 'dark' : 'light')}
+    <View style={{ flex: 1 }}>
+      <GradientBackground />
+      <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.container}>
+          {user ? (
+            <GlassCard tone="primary" padding="lg">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: designTokens.spacing.md }}>
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: theme.colors.primary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: theme.colors.onPrimary, fontSize: 24, fontWeight: '700' }}>
+                    {(user.displayName ?? user.email ?? '?').trim().charAt(0).toLocaleUpperCase('tr')}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[designTokens.typography.subtitle, { color: theme.colors.onSurface }]}>
+                    {user.displayName || 'Hesap'}
+                  </Text>
+                  <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant }]}>
+                    {user.email}
+                  </Text>
+                </View>
+                <IconButton icon="logout" onPress={() => signOutUser()} />
+              </View>
+            </GlassCard>
+          ) : null}
+
+          <GlassCard padding="lg">
+            <SectionTitle icon="theme-light-dark">Görünüm</SectionTitle>
+            <View style={styles.row}>
+              <Text style={{ color: theme.colors.onSurface }}>Koyu tema</Text>
+              <Switch value={mode === 'dark'} onValueChange={(v) => setMode(v ? 'dark' : 'light')} />
+            </View>
+          </GlassCard>
+
+          <GlassCard padding="lg">
+            <SectionTitle icon="file-export-outline">Dışa Aktar</SectionTitle>
+            <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant, marginBottom: 10 }]}>
+              Gelir/gider verilerinizi Excel ya da PDF olarak indirin.
+            </Text>
+            <SegmentedButtons
+              value={exportRange}
+              onValueChange={(v) => setExportRange(v as ExportRange)}
+              buttons={[
+                { value: 'all', label: 'Tümü' },
+                { value: 'month', label: 'Bu Ay' },
+                { value: 'custom', label: 'Aralık' },
+              ]}
+              style={{ marginBottom: 12 }}
             />
-          </View>
-        </Card.Content>
-      </Card>
+            {exportRange === 'custom' ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                <TextInput
+                  label="Başlangıç (YYYY-MM-DD)"
+                  value={exportFrom}
+                  onChangeText={setExportFrom}
+                  mode="outlined"
+                  style={{ flex: 1 }}
+                />
+                <TextInput
+                  label="Bitiş (YYYY-MM-DD)"
+                  value={exportTo}
+                  onChangeText={setExportTo}
+                  mode="outlined"
+                  style={{ flex: 1 }}
+                />
+              </View>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button
+                mode="contained"
+                icon="file-excel"
+                loading={busy === 'excel'}
+                disabled={busy !== null}
+                onPress={() => runExport('excel')}
+                style={{ flex: 1 }}
+              >
+                Excel (.xlsx)
+              </Button>
+              <Button
+                mode="contained-tonal"
+                icon="file-pdf-box"
+                loading={busy === 'pdf'}
+                disabled={busy !== null}
+                onPress={() => runExport('pdf')}
+                style={{ flex: 1 }}
+              >
+                PDF
+              </Button>
+            </View>
+          </GlassCard>
 
-      <CategoryGroup
-        title="Gider Kategorileri"
-        type="expense"
-        categories={categories.filter((c) => c.type === 'expense')}
-        onEdit={setEditing}
-        onDelete={deleteCategory}
-        onAdd={() => setCreating('expense')}
-      />
-      <CategoryGroup
-        title="Gelir Kategorileri"
-        type="income"
-        categories={categories.filter((c) => c.type === 'income')}
-        onEdit={setEditing}
-        onDelete={deleteCategory}
-        onAdd={() => setCreating('income')}
-      />
+          <CategoryGroup
+            title="Gider Kategorileri"
+            type="expense"
+            categories={categories.filter((c) => c.type === 'expense')}
+            onEdit={setEditing}
+            onDelete={deleteCategory}
+            onAdd={() => setCreating('expense')}
+          />
+          <CategoryGroup
+            title="Gelir Kategorileri"
+            type="income"
+            categories={categories.filter((c) => c.type === 'income')}
+            onEdit={setEditing}
+            onDelete={deleteCategory}
+            onAdd={() => setCreating('income')}
+          />
 
-      <Card mode="elevated">
-        <Card.Title title="Veri" titleVariant="titleMedium" />
-        <Card.Content>
-          <Button
-            mode="outlined"
-            icon="restore"
-            textColor={theme.colors.error}
-            onPress={() => setResetOpen(true)}
-          >
-            Tüm verileri sıfırla
-          </Button>
-        </Card.Content>
-      </Card>
-
-      <Portal>
-        <CategoryDialog
-          visible={!!editing || !!creating}
-          initial={editing ?? undefined}
-          defaultType={creating ?? 'expense'}
-          onDismiss={() => {
-            setEditing(null);
-            setCreating(null);
-          }}
-          onSave={async (draft) => {
-            if (editing) {
-              await updateCategory({ ...editing, ...draft });
-            } else {
-              await addCategory(draft);
-            }
-            setEditing(null);
-            setCreating(null);
-          }}
-        />
-
-        <Dialog visible={resetOpen} onDismiss={() => setResetOpen(false)}>
-          <Dialog.Title>Verileri sıfırla</Dialog.Title>
-          <Dialog.Content>
-            <Text>Tüm işlemler ve kategoriler varsayılanlara döner. Bu işlem geri alınamaz.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setResetOpen(false)}>Vazgeç</Button>
+          <GlassCard padding="lg">
+            <SectionTitle icon="database-alert">Veri</SectionTitle>
             <Button
+              mode="outlined"
+              icon="restore"
               textColor={theme.colors.error}
-              onPress={async () => {
-                await resetAll();
-                setResetOpen(false);
-              }}
+              onPress={() => setResetOpen(true)}
+              style={{ borderColor: theme.colors.error }}
             >
-              Sıfırla
+              Tüm verileri sıfırla
             </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-    </ScrollView>
+          </GlassCard>
+
+          <Portal>
+            <CategoryDialog
+              visible={!!editing || !!creating}
+              initial={editing ?? undefined}
+              defaultType={creating ?? 'expense'}
+              onDismiss={() => {
+                setEditing(null);
+                setCreating(null);
+              }}
+              onSave={async (draft) => {
+                if (editing) {
+                  await updateCategory({ ...editing, ...draft });
+                } else {
+                  await addCategory(draft);
+                }
+                setEditing(null);
+                setCreating(null);
+              }}
+            />
+
+            <Dialog visible={resetOpen} onDismiss={() => setResetOpen(false)}>
+              <Dialog.Title>Verileri sıfırla</Dialog.Title>
+              <Dialog.Content>
+                <Text>Tüm işlemler, alışveriş listeleri ve notlar silinir. Kategoriler varsayılana döner.</Text>
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button onPress={() => setResetOpen(false)}>Vazgeç</Button>
+                <Button
+                  textColor={theme.colors.error}
+                  onPress={async () => {
+                    await resetAll();
+                    setResetOpen(false);
+                  }}
+                >
+                  Sıfırla
+                </Button>
+              </Dialog.Actions>
+            </Dialog>
+          </Portal>
+        </ScrollView>
+      </SafeAreaView>
+      <Snackbar visible={!!toast} onDismiss={() => setToast(null)} duration={3000}>
+        {toast}
+      </Snackbar>
+    </View>
+  );
+}
+
+function SectionTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <MaterialCommunityIcons name={icon} size={22} color={theme.colors.primary} />
+      <Text style={[designTokens.typography.subtitle, { color: theme.colors.onSurface }]}>{children}</Text>
+    </View>
   );
 }
 
@@ -139,49 +278,51 @@ interface CategoryGroupProps {
 }
 
 function CategoryGroup({ title, categories, onEdit, onDelete, onAdd }: CategoryGroupProps) {
+  const theme = useTheme();
   return (
-    <Card mode="elevated">
-      <Card.Title
-        title={title}
-        titleVariant="titleMedium"
-        right={(props) => <IconButton {...props} icon="plus" onPress={onAdd} />}
-      />
-      <Card.Content style={{ paddingHorizontal: 0 }}>
-        {categories.length === 0 ? (
-          <Text style={{ padding: 16 }}>Kategori yok.</Text>
-        ) : (
-          categories.map((cat, idx) => (
-            <React.Fragment key={cat.id}>
-              {idx > 0 && <Divider />}
-              <List.Item
-                title={cat.name}
-                left={() => (
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      backgroundColor: cat.color + '22',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginLeft: 8,
-                    }}
-                  >
-                    <MaterialCommunityIcons name={cat.icon} size={20} color={cat.color} />
-                  </View>
-                )}
-                right={() => (
-                  <View style={{ flexDirection: 'row' }}>
-                    <IconButton icon="pencil" onPress={() => onEdit(cat)} />
-                    <IconButton icon="trash-can-outline" onPress={() => onDelete(cat.id)} />
-                  </View>
-                )}
-              />
-            </React.Fragment>
-          ))
-        )}
-      </Card.Content>
-    </Card>
+    <GlassCard padding="lg">
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={[designTokens.typography.subtitle, { color: theme.colors.onSurface, flex: 1 }]}>
+          {title}
+        </Text>
+        <IconButton icon="plus" onPress={onAdd} />
+      </View>
+      {categories.length === 0 ? (
+        <Text style={{ color: theme.colors.onSurfaceVariant }}>Kategori yok.</Text>
+      ) : (
+        categories.map((cat, idx) => (
+          <React.Fragment key={cat.id}>
+            {idx > 0 && <Divider />}
+            <List.Item
+              title={cat.name}
+              titleStyle={{ color: theme.colors.onSurface }}
+              style={{ paddingLeft: 0 }}
+              left={() => (
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: cat.color + '22',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginLeft: 0,
+                  }}
+                >
+                  <MaterialCommunityIcons name={cat.icon} size={20} color={cat.color} />
+                </View>
+              )}
+              right={() => (
+                <View style={{ flexDirection: 'row' }}>
+                  <IconButton icon="pencil" onPress={() => onEdit(cat)} />
+                  <IconButton icon="trash-can-outline" onPress={() => onDelete(cat.id)} />
+                </View>
+              )}
+            />
+          </React.Fragment>
+        ))
+      )}
+    </GlassCard>
   );
 }
 
@@ -269,12 +410,12 @@ function CategoryDialog({ visible, initial, defaultType, onDismiss, onSave }: Ca
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 16,
+    padding: designTokens.spacing.lg,
+    gap: designTokens.spacing.md,
     maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
-    paddingBottom: 80,
+    paddingBottom: 120,
   },
   row: {
     flexDirection: 'row',
