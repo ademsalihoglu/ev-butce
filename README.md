@@ -53,6 +53,34 @@ npx firebase-tools use evmuhasebeapp
 npx firebase-tools deploy --only firestore:rules
 ```
 
+## Admin Paneli (SEO, logo, iletişim, duyurular)
+
+Geliştirici / ekip üyelerinin site ayarlarını yönetip kullanıcılara duyuru/kampanya göndermesi için "Admin Paneli" eklendi.
+
+**Yetenekler:**
+- **Genel:** site adı + logo URL (Welcome ekranında görünür)
+- **SEO:** `<title>`, meta description ve keywords (web'de sayfa açıldığında otomatik uygulanır)
+- **İletişim:** e-posta, telefon, adres, destek URL + sosyal bağlantılar (Ayarlar → Hakkında sayfasında kullanıcıya gösterilir)
+- **Duyurular:** markdown destekli haber/kampanya/sistem duyuruları; Dashboard üstünde dismissable banner + `Duyurular` sayfasında tam liste
+- **Yöneticiler:** e-posta ile yeni admin ekleme/kaldırma
+
+**İlk admin nasıl bootstrap edilir?**
+
+`.env` dosyasına ilgili e-postaları virgülle ekleyin:
+
+```
+EXPO_PUBLIC_ADMIN_EMAILS=siz@example.com,ikinci-admin@example.com
+```
+
+Bu e-posta ile uygulamaya giriş yapıldığında `admins/<uid>` dokümanı otomatik yazılır ve Ayarlar'da "Admin Paneli" girişi görünür. Paneli açıp ek admin ekledikten sonra `.env` listesini boşaltabilirsiniz.
+
+**Yeni Firestore kuralları** (bu PR ile `firestore.rules` güncellendi):
+- `siteConfig/global` — public read (SEO için), admin-only write
+- `announcements/{id}` — signed-in read, admin-only write
+- `admins/{uid}` — self-create (bootstrap için), admin-only manage
+
+Her değişiklik sonrası `npx firebase-tools deploy --only firestore:rules` ile Firestore kurallarını güncel tutun.
+
 ## Proje Yapısı
 
 ```

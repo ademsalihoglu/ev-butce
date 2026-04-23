@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +12,7 @@ import { Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientBackground } from './GradientBackground';
 import { GlassCard } from './GlassCard';
+import { useAdmin } from '../context/AdminContext';
 import { designTokens } from '../theme';
 
 interface AuthLayoutProps {
@@ -24,6 +26,8 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const isWide = width >= 700;
+  const { siteConfig } = useAdmin();
+  const brandName = (siteConfig.siteName || 'Ev Bütçe').toLocaleUpperCase('tr');
 
   return (
     <View style={styles.root}>
@@ -41,9 +45,18 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             keyboardShouldPersistTaps="handled"
           >
             <View style={[styles.brand, { marginBottom: designTokens.spacing.xl }]}>
-              <Text style={[designTokens.typography.caption, { color: 'rgba(255,255,255,0.8)' }]}>
-                EV BÜTÇE
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {siteConfig.logoUrl ? (
+                  <Image
+                    source={{ uri: siteConfig.logoUrl }}
+                    style={{ width: 40, height: 40, borderRadius: 10 }}
+                    resizeMode="contain"
+                  />
+                ) : null}
+                <Text style={[designTokens.typography.caption, { color: 'rgba(255,255,255,0.8)' }]}>
+                  {brandName}
+                </Text>
+              </View>
               <Text style={[designTokens.typography.display, { color: '#FFFFFF', marginTop: 4 }]}>
                 {title}
               </Text>
@@ -80,7 +93,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
           { color: theme.dark ? 'rgba(226,232,240,0.45)' : 'rgba(15,23,42,0.4)' },
         ]}
       >
-        © {new Date().getFullYear()} Ev Bütçe
+        © {new Date().getFullYear()} {siteConfig.siteName || 'Ev Bütçe'}
       </Text>
     </View>
   );

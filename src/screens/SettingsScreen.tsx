@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useData } from '../context/DataContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useAdmin } from '../context/AdminContext';
 import { useGroup } from '../context/GroupContext';
 import type { Category, TransactionType } from '../db';
 import { GlassCard } from '../components/GlassCard';
@@ -47,6 +48,7 @@ export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { mode, setMode } = useAppTheme();
   const { user, signOutUser } = useAuth();
+  const { isAdmin, undismissedAnnouncements, visibleAnnouncements } = useAdmin();
   const { activeGroup, available: groupsAvailable } = useGroup();
   const { categories, transactions, addCategory, updateCategory, deleteCategory, resetAll } = useData();
   const [editing, setEditing] = useState<Category | null>(null);
@@ -128,6 +130,54 @@ export default function SettingsScreen() {
               <Switch value={mode === 'dark'} onValueChange={(v) => setMode(v ? 'dark' : 'light')} />
             </View>
           </GlassCard>
+
+          {visibleAnnouncements.length > 0 ? (
+            <GlassCard padding="lg">
+              <SectionTitle icon="bullhorn-outline">Duyurular</SectionTitle>
+              <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant, marginBottom: 10 }]}>
+                {undismissedAnnouncements.length > 0
+                  ? `${undismissedAnnouncements.length} okunmamış duyuru var.`
+                  : `${visibleAnnouncements.length} aktif duyuru.`}
+              </Text>
+              <Button
+                mode="contained-tonal"
+                icon="arrow-right"
+                onPress={() => navigation.navigate('Announcements')}
+              >
+                Duyuruları görüntüle
+              </Button>
+            </GlassCard>
+          ) : null}
+
+          <GlassCard padding="lg">
+            <SectionTitle icon="information-outline">Hakkında</SectionTitle>
+            <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant, marginBottom: 10 }]}>
+              İletişim bilgileri, destek ve sosyal bağlantılar.
+            </Text>
+            <Button
+              mode="outlined"
+              icon="information-outline"
+              onPress={() => navigation.navigate('About')}
+            >
+              Hakkında sayfasını aç
+            </Button>
+          </GlassCard>
+
+          {isAdmin ? (
+            <GlassCard tone="primary" padding="lg">
+              <SectionTitle icon="shield-account">Admin</SectionTitle>
+              <Text style={[designTokens.typography.caption, { color: theme.colors.onSurfaceVariant, marginBottom: 10 }]}>
+                Site ayarlarını, SEO'yu ve kullanıcı duyurularını bu panelden yönetin.
+              </Text>
+              <Button
+                mode="contained"
+                icon="shield-account"
+                onPress={() => navigation.navigate('AdminPanel')}
+              >
+                Admin Paneli
+              </Button>
+            </GlassCard>
+          ) : null}
 
           {groupsAvailable ? (
             <GlassCard padding="lg">
