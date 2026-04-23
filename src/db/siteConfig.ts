@@ -132,6 +132,17 @@ export function subscribeAnnouncements(
   );
 }
 
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  (Object.keys(obj) as Array<keyof T>).forEach((key) => {
+    const value = obj[key];
+    if (value !== undefined) {
+      out[key] = value;
+    }
+  });
+  return out;
+}
+
 export async function upsertAnnouncement(
   data: Omit<Announcement, 'id' | 'createdAt' | 'createdBy'> & {
     id?: string;
@@ -139,6 +150,7 @@ export async function upsertAnnouncement(
   }
 ): Promise<string> {
   const { id, ...rest } = data;
+  const cleaned = stripUndefined(rest);
   const now = new Date().toISOString();
   if (id) {
     const ref = doc(getDb(), 'announcements', id);
@@ -146,12 +158,12 @@ export async function upsertAnnouncement(
     const createdAt = existing.exists()
       ? ((existing.data() as Announcement).createdAt ?? now)
       : now;
-    await setDoc(ref, { ...rest, createdAt });
+    await setDoc(ref, { ...cleaned, createdAt });
     return id;
   }
   const newId = doc(collection(getDb(), 'announcements')).id;
   const ref = doc(getDb(), 'announcements', newId);
-  await setDoc(ref, { ...rest, createdAt: now });
+  await setDoc(ref, { ...cleaned, createdAt: now });
   return newId;
 }
 
